@@ -2,7 +2,7 @@ CXX = clang++-10 -stdlib=libc++
 CXXFLAGS = -Wall -Werror -std=c++17 -g $(shell pkg-config --cflags libgit2)
 LDFLAGS = $(shell pkg-config --libs libgit2)
 
-EXE = git_task
+EXE = git_fast_reword
 SRCDIR = src
 OBJDIR = obj
 

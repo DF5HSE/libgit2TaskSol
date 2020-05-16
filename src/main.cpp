@@ -27,54 +27,68 @@ void throwIfError(int error)
 
 int main(int argc, const char *argv[])
 {
+  /* Declaration of required variables */
+  // I put there all variables to have an oppotunity to make git_*_free()
+  git_repository *repo = nullptr;           // repository for rebase
+  git_annotated_commit *annotCom = nullptr; // annotated commit for changing its message, used in rebase init
+  git_object *OID = nullptr;                // git_oid object with hash of target commit
+  git_rebase *rebase = nullptr;             // rebase object
+  git_commit *com;                          // target commit, used for getting commit's author
+  git_oid rebaseOID = {{0}};                // rebase's oid, required in git_rebase_commit
+  git_rebase_operation *op = nullptr;       // rebase operation, required in git_rebase_next
+
+  int returnCode = 0;
+
   try
   {
+    /* initialization of libgit2 */
     git_libgit2_init();
 
-    git_repository *repo = nullptr;
-    //throwIfError(git_repository_open(&repo, argv[0]));
+    /* open target repository */
+    // TODO: CHANGE next line to :throwIfError(git_repository_open(&repo, argv[0]));
     throwIfError(git_repository_open(&repo, "pb2019"));
 
-    git_annotated_commit *annotCom = nullptr;
+    /* get target annotated commit */
     if (argv[1][0] == 'H')
     {
-      git_object *obj = nullptr;
-      throwIfError(git_revparse_single(&obj, repo, argv[1]));
-      throwIfError(git_annotated_commit_lookup(&annotCom, repo, git_object_id(obj)));
+      // commit discripted by "HEAD*"
+      throwIfError(git_revparse_single(&OID, repo, argv[1]));
+      throwIfError(git_annotated_commit_lookup(&annotCom, repo, git_object_id(OID)));
     }
     else
+    {
+      // commit discripted by hash
       throwIfError(git_annotated_commit_from_revspec(&annotCom, repo, argv[1]));
-    
-    git_rebase *rebase = nullptr;
+    }
+
+    /* rebase object initialization */
     throwIfError(git_rebase_init(&rebase, repo, nullptr, nullptr, annotCom, nullptr));
 
-    git_commit *com;
+    /* getting commit from hash of target annotated_commit.
+     * I will be used for getting commit author signature.
+     */
     throwIfError(git_commit_lookup(&com, repo, git_annotated_commit_id(annotCom)));
 
-    git_oid rebaseOID = {{0}};
-    git_rebase_operation *op = nullptr;
+    /* get rebase operation and change commit message */
     if (git_rebase_next(&op, rebase) == GIT_OK)
-    {
-      op->type = GIT_REBASE_OPERATION_REWORD;
       throwIfError(git_rebase_commit(&rebaseOID, rebase, nullptr, git_commit_author(com), nullptr, argv[2]));
-    }
+
+    /* pass other commits */
     while (git_rebase_next(&op, rebase) == GIT_OK)
-    {
-      op->type = GIT_REBASE_OPERATION_PICK;
-      throwIfError(git_rebase_commit(&rebaseOID, rebase, nullptr, git_commit_author(com), nullptr, "WHAT"));
-    }
-    git_rebase_finish(rebase, nullptr);
-    git_rebase_free(rebase);
-
-    git_repository_free(repo);
-    //std::cout << git_rebase_operation_entrycount(rebase) << std::endl;
+      throwIfError(git_rebase_commit(&rebaseOID, rebase, nullptr, git_commit_author(com), nullptr, nullptr));
   }
-
   catch (const MyGitException &e)
   {
     std::cerr << e.what() << std::endl;
-    return -1;
+    returnCode = -1;
   }
 
-  return 0;
+  /* Deinitialization of all objects */
+  git_rebase_finish(rebase, nullptr);
+  git_annotated_commit_free(annotCom);
+  git_commit_free(com);
+  git_rebase_free(rebase);
+  git_repository_free(repo);
+
+  return returnCode;
 }
